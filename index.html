@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Doce Sabor · Gestão de Estoque e Vendas</title>
+<link rel="icon" type="image/svg+xml" href="img/logo.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<!-- ETAPA EXCEL: biblioteca SheetJS, usada pra gerar o arquivo .xlsx de vendas
+     do dia direto no navegador. Quando o PHP entrar, essa exportação pode
+     passar a ser feita no servidor (ex: com PhpSpreadsheet) — mas a função
+     JS abaixo já está isolada em export.js pra facilitar essa troca depois. -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body>
+
+<!-- ============ TOAST ============ -->
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<!-- ============ TELA DE LOGIN ============ -->
+<section id="login-screen" class="login-screen">
+  <div class="login-visual">
+    <div class="login-visual__pattern" aria-hidden="true"></div>
+    <div class="login-visual__content">
+      <span class="brand-mark">
+        <img src="img/logo.svg" alt="Doce Sabor" class="brand-mark__img">
+      </span>
+      <h1>Doce Sabor</h1>
+      <p class="login-visual__tag">Controle inteligente de estoque &amp; vendas para docerias que não deixam nada vencer.</p>
+    </div>
+  </div>
+
+  <div class="login-form-wrap">
+    <form id="login-form" class="login-form" novalidate>
+      <p class="eyebrow">Acesse sua conta</p>
+      <h2>Bem-vinda de volta</h2>
+      <p class="login-form__hint">Use qualquer e-mail cadastrado abaixo — é uma demonstração local, sem servidor.</p>
+
+      <label class="field">
+        <span>E-mail</span>
+        <input type="email" id="login-email" placeholder="ana@docesabor.com.br" autocomplete="username" required>
+      </label>
+
+      <label class="field">
+        <span>Senha</span>
+        <input type="password" id="login-password" placeholder="••••••••" autocomplete="current-password" required>
+      </label>
+
+      <div id="login-error" class="field-error" hidden></div>
+
+      <button type="submit" class="btn btn--primary btn--block">Entrar no painel</button>
+
+      <div class="login-demo-users">
+        <p>Contas de demonstração</p>
+        <div class="login-demo-users__grid">
+          <button type="button" class="demo-chip" data-email="ana@docesabor.com.br" data-role="admin">
+            <strong>Ana Ferreira</strong><span>Administradora</span>
+          </button>
+          <button type="button" class="demo-chip" data-email="bruno@docesabor.com.br" data-role="operador">
+            <strong>Bruno Alves</strong><span>Operador</span>
+          </button>
+        </div>
+      </div>
+    </form>
+  </div>
+</section>
+
+<!-- ============ APP ============ -->
+<div id="app" class="app" hidden>
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar__brand">
+      <span class="brand-mark brand-mark--sm">
+        <img src="img/logo.svg" alt="Doce Sabor" class="brand-mark__img">
+      </span>
+      <div>
+        <strong>Doce Sabor</strong>
+        <small>Gestão &amp; Estoque</small>
+      </div>
+    </div>
+
+    <nav class="sidebar__nav">
+      <button class="nav-item" data-view="dashboard">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M4 13h6V4H4v9Zm10 7h6v-9h-6v9ZM4 20h6v-5H4v5ZM14 4v5h6V4h-6Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        <span>Dashboard</span>
+      </button>
+      <button class="nav-item" data-view="estoque">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4-9 4-9-4Zm0 0v10l9 4 9-4V7M3 7l9 4m0 0 9-4m-9 4v10" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        <span>Estoque</span>
+      </button>
+      <button class="nav-item" data-view="vendas">
+        <svg viewBox="0 0 24 24" fill="none"><circle cx="9" cy="20" r="1.4" fill="currentColor"/><circle cx="17" cy="20" r="1.4" fill="currentColor"/><path d="M3 4h2l1.6 10.2A2 2 0 0 0 8.6 16H17a2 2 0 0 0 2-1.6L20.3 8H6" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg>
+        <span>Registrar venda</span>
+      </button>
+      <button class="nav-item" data-view="alertas">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M12 3 2 20h20L12 3Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 10v4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="17" r="0.9" fill="currentColor"/></svg>
+        <span>Alertas de validade</span>
+        <span id="nav-alert-count" class="nav-badge" hidden>0</span>
+      </button>
+      <button class="nav-item" data-view="relatorios">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M5 20V10M12 20V4M19 20v-7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+        <span>Relatórios</span>
+      </button>
+      <button class="nav-item" data-view="usuarios" data-admin-only="true">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M16 20v-1.6a3.6 3.6 0 0 0-3.6-3.6H7.6A3.6 3.6 0 0 0 4 18.4V20M9.8 11a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8ZM20 20v-1.6a3.4 3.4 0 0 0-2.4-3.26M14.8 4.4a3.4 3.4 0 0 1 0 6.55" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Usuários</span>
+      </button>
+    </nav>
+
+    <div class="sidebar__user">
+      <div id="sidebar-avatar" class="avatar">A</div>
+      <div class="sidebar__user-info">
+        <strong id="sidebar-username">—</strong>
+        <small id="sidebar-userrole">—</small>
+      </div>
+      <button id="minha-conta-btn" class="icon-btn" title="Minha conta / redefinir senha" aria-label="Minha conta">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M15.5 7.5a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0Zm3.7 4.3L14 17l-1.5 4-1-2.5L9 17l5.2-5.2m2.5-2.5 2.3 2.3m-2.3-2.3 1.1-1.1a1.5 1.5 0 0 1 2.1 2.1l-1.1 1.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="logout-btn" class="icon-btn" title="Sair" aria-label="Sair">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <header class="topbar">
+      <div>
+        <p class="topbar__eyebrow" id="topbar-eyebrow">Painel</p>
+        <h1 id="topbar-title">Dashboard</h1>
+      </div>
+      <div class="topbar__right">
+        <div class="topbar__clock" id="topbar-clock"></div>
+      </div>
+    </header>
+
+    <main class="content">
+
+      <!-- ---------- DASHBOARD ---------- -->
+      <section id="view-dashboard" class="view">
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <span class="kpi-card__label">Lotes ativos</span>
+            <span class="kpi-card__value" id="kpi-lotes-ativos">0</span>
+            <span class="kpi-card__foot">em estoque agora</span>
+          </div>
+          <div class="kpi-card kpi-card--danger">
+            <span class="kpi-card__label">Vencimento urgente</span>
+            <span class="kpi-card__value" id="kpi-urgentes">0</span>
+            <span class="kpi-card__foot">vencem em até 3 dias</span>
+          </div>
+          <div class="kpi-card kpi-card--warning">
+            <span class="kpi-card__label">Atenção</span>
+            <span class="kpi-card__value" id="kpi-atencao">0</span>
+            <span class="kpi-card__foot">vencem em 3–5 dias</span>
+          </div>
+          <div class="kpi-card kpi-card--accent">
+            <span class="kpi-card__label">Vendas hoje</span>
+            <span class="kpi-card__value" id="kpi-vendas-hoje">0</span>
+            <span class="kpi-card__foot" id="kpi-vendas-hoje-valor">R$ 0,00</span>
+          </div>
+        </div>
+
+        <div class="dashboard-grid">
+          <div class="panel">
+            <div class="panel__head">
+              <h2>Semáforo de validade</h2>
+              <p>Cada anel mostra o tempo restante do lote até o vencimento.</p>
+            </div>
+            <div id="dashboard-rings" class="ring-grid"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel__head">
+              <h2>Painel de urgência</h2>
+              <p>Itens críticos que precisam de ação agora.</p>
+            </div>
+            <div id="dashboard-urgentes" class="urgent-list"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- ESTOQUE ---------- -->
+      <section id="view-estoque" class="view">
+        <div class="toolbar">
+          <div class="search-field">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <input type="text" id="estoque-search" placeholder="Buscar produto...">
+          </div>
+          <select id="estoque-filter-categoria">
+            <option value="">Todas as categorias</option>
+          </select>
+          <select id="estoque-filter-status">
+            <option value="">Todos os status</option>
+            <option value="verde">Verde</option>
+            <option value="amarelo">Amarelo</option>
+            <option value="vermelho">Vermelho</option>
+          </select>
+          <button class="btn btn--primary" id="open-novo-lote">+ Cadastrar lote</button>
+        </div>
+
+        <div class="table-wrap panel">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Produto</th>
+                <th>Categoria</th>
+                <th>Lote</th>
+                <th>Fabricação</th>
+                <th>Validade</th>
+                <th>Qtd. atual</th>
+                <th>Status</th>
+                <th>Cadastrado por</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="estoque-tbody"></tbody>
+          </table>
+          <p id="estoque-empty" class="empty-state" hidden>Nenhum lote encontrado com esses filtros.</p>
+        </div>
+      </section>
+
+      <!-- ---------- REGISTRAR VENDA (PDV) ---------- -->
+      <section id="view-vendas" class="view">
+        <div class="pdv-grid">
+          <div class="panel">
+            <div class="panel__head">
+              <h2>Selecionar produto</h2>
+            </div>
+            <div class="search-field search-field--full">
+              <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.7"/><path d="m20 20-3.5-3.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+              <input type="text" id="pdv-search" placeholder="Buscar produto para vender...">
+            </div>
+            <div id="pdv-produtos" class="pdv-produtos"></div>
+          </div>
+
+          <div class="panel pdv-cart">
+            <div class="panel__head">
+              <h2>Venda atual</h2>
+              <p id="pdv-cart-hint">Adicione produtos ao carrinho.</p>
+            </div>
+            <div id="pdv-cart-items" class="pdv-cart__items"></div>
+            <div class="pdv-cart__total">
+              <span>Total</span>
+              <strong id="pdv-total">R$ 0,00</strong>
+            </div>
+            <button class="btn btn--primary btn--block" id="finalizar-venda" disabled>Finalizar venda</button>
+            <button class="btn btn--ghost btn--block" id="cancelar-venda">Limpar carrinho</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- ALERTAS ---------- -->
+      <section id="view-alertas" class="view">
+        <div class="panel">
+          <div class="panel__head">
+            <h2>Lotes próximos do vencimento</h2>
+            <p>Ordenados por urgência. Priorize a venda ou descarte o lote.</p>
+          </div>
+          <div id="alertas-list" class="alert-list"></div>
+          <p id="alertas-empty" class="empty-state" hidden>Nenhum alerta no momento — tudo sob controle. 🎉</p>
+        </div>
+      </section>
+
+      <!-- ---------- RELATÓRIOS ---------- -->
+      <section id="view-relatorios" class="view">
+        <div class="report-grid">
+          <div class="panel">
+            <div class="panel__head">
+              <h2>Rotatividade de produtos</h2>
+              <p>Unidades vendidas por produto.</p>
+            </div>
+            <div id="report-rotatividade" class="bar-chart"></div>
+          </div>
+
+          <div class="panel">
+            <div class="panel__head">
+              <h2>Índice de desperdício</h2>
+              <p>Proporção de lotes descartados por vencimento.</p>
+            </div>
+            <div class="waste-gauge">
+              <svg viewBox="0 0 140 140" class="waste-gauge__svg">
+                <circle cx="70" cy="70" r="58" class="waste-gauge__track"/>
+                <circle id="waste-gauge-fill" cx="70" cy="70" r="58" class="waste-gauge__fill"/>
+              </svg>
+              <div class="waste-gauge__label">
+                <strong id="waste-percent">0%</strong>
+                <span>desperdício</span>
+              </div>
+            </div>
+            <ul class="waste-legend">
+              <li><span class="dot dot--red"></span> Descartados: <strong id="waste-descartados">0</strong></li>
+              <li><span class="dot" style="background:var(--plum-300)"></span> Vendidos/ativos: <strong id="waste-ok">0</strong></li>
+            </ul>
+          </div>
+
+          <div class="panel">
+            <div class="panel__head panel__head--row">
+              <div>
+                <h2>Histórico de vendas</h2>
+                <p>Últimas transações registradas.</p>
+              </div>
+              <button type="button" class="btn btn--ghost btn--sm" id="export-vendas-dia">
+                <svg viewBox="0 0 24 24" fill="none" width="15" height="15" style="margin-right:5px;vertical-align:-2px;"><path d="M12 3v13m0 0-4-4m4 4 4-4M5 21h14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Exportar vendas do dia (Excel)
+              </button>
+            </div>
+            <div id="report-historico" class="history-list"></div>
+          </div>
+
+          <!-- Painel novo: mostra quem cadastrou lote, quem excluiu lote e
+               quem cadastrou usuário — como um "log" de ações do sistema. -->
+          <div class="panel">
+            <div class="panel__head">
+              <h2>Histórico de ações</h2>
+              <p>Quem cadastrou ou excluiu lotes, e quem cadastrou usuários.</p>
+            </div>
+            <div id="report-auditoria" class="history-list"></div>
+            <p id="auditoria-empty" class="empty-state" hidden>Nenhuma ação registrada ainda.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- USUÁRIOS (só administrador) ---------- -->
+      <section id="view-usuarios" class="view">
+        <div class="panel" style="margin-bottom:20px;">
+          <div class="panel__head">
+            <h2>Adicionar usuário</h2>
+            <p>Somente administradores podem cadastrar novos usuários.</p>
+          </div>
+          <form id="form-usuario">
+            <div class="field-row">
+              <label class="field">
+                <span>Nome</span>
+                <input type="text" id="usuario-nome" placeholder="Ex: Carla Souza" required>
+              </label>
+              <label class="field">
+                <span>E-mail</span>
+                <input type="email" id="usuario-email" placeholder="carla@docesabor.com.br" required>
+              </label>
+            </div>
+            <label class="field">
+              <span>Perfil</span>
+              <select id="usuario-perfil">
+                <option value="operador">Operador</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Senha inicial</span>
+              <input type="password" id="usuario-senha" placeholder="Mínimo 6 caracteres" minlength="6" required>
+              <small style="display:block;margin-top:6px;color:var(--plum-500);font-size:12px;">
+                A pessoa poderá trocar essa senha depois em "Minha conta", no menu lateral.
+              </small>
+            </label>
+            <div id="usuario-form-error" class="field-error" hidden></div>
+            <button type="submit" class="btn btn--primary">Adicionar usuário</button>
+          </form>
+        </div>
+
+        <div class="table-wrap panel">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>E-mail</th>
+                <th>Perfil</th>
+              </tr>
+            </thead>
+            <tbody id="usuarios-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- ============ MODAL: NOVO LOTE ============ -->
+<div id="modal-lote" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal__head">
+      <h2>Cadastrar produto &amp; lote</h2>
+      <button class="icon-btn" id="close-modal-lote" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form id="form-lote" class="modal__body">
+      <label class="field">
+        <span>Produto</span>
+        <select id="lote-produto-existente">
+          <option value="">— Novo produto —</option>
+        </select>
+      </label>
+
+      <div id="novo-produto-fields" class="field-group">
+        <label class="field">
+          <span>Nome do produto</span>
+          <input type="text" id="lote-produto-nome" placeholder="Ex: Brigadeiro Gourmet">
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>Categoria</span>
+            <select id="lote-produto-categoria">
+              <option>Doce</option>
+              <option>Bolo</option>
+              <option>Salgado</option>
+              <option>Torta</option>
+              <option>Bebida</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Unidade</span>
+            <select id="lote-produto-unidade">
+              <option>unidade</option>
+              <option>kg</option>
+              <option>fatia</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>Preço unitário (R$)</span>
+          <input type="number" id="lote-produto-preco" min="0" step="0.01" placeholder="12.50">
+        </label>
+      </div>
+
+      <div class="field-row">
+        <label class="field">
+          <span>Data de fabricação</span>
+          <input type="date" id="lote-data-fabricacao" required>
+        </label>
+        <label class="field">
+          <span>Data de validade</span>
+          <input type="date" id="lote-data-validade" required>
+        </label>
+      </div>
+
+      <label class="field">
+        <span>Quantidade inicial</span>
+        <input type="number" id="lote-quantidade" min="1" step="1" placeholder="20" required>
+      </label>
+
+      <div id="lote-form-error" class="field-error" hidden></div>
+
+      <div class="modal__actions">
+        <button type="button" class="btn btn--ghost" id="cancel-modal-lote">Cancelar</button>
+        <button type="submit" class="btn btn--primary">Salvar lote</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ============ MODAL: MINHA CONTA / REDEFINIR SENHA ============ -->
+<div id="modal-senha" class="modal-overlay" hidden>
+  <div class="modal">
+    <div class="modal__head">
+      <h2>Minha conta</h2>
+      <button class="icon-btn" id="close-modal-senha" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" fill="none"><path d="m6 6 12 12M18 6 6 18" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+    <form id="form-senha" class="modal__body">
+      <p style="font-size:13px;color:var(--plum-500);margin-bottom:16px;">
+        Logado(a) como <strong id="senha-modal-usuario">—</strong>. Preencha os campos abaixo para redefinir sua senha.
+      </p>
+
+      <label class="field">
+        <span>Senha atual</span>
+        <input type="password" id="senha-atual" autocomplete="current-password" required>
+      </label>
+      <label class="field">
+        <span>Nova senha</span>
+        <input type="password" id="senha-nova" placeholder="Mínimo 6 caracteres" minlength="6" autocomplete="new-password" required>
+      </label>
+      <label class="field">
+        <span>Confirmar nova senha</span>
+        <input type="password" id="senha-confirmar" minlength="6" autocomplete="new-password" required>
+      </label>
+
+      <div id="senha-form-error" class="field-error" hidden></div>
+
+      <div class="modal__actions">
+        <button type="button" class="btn btn--ghost" id="cancel-modal-senha">Cancelar</button>
+        <button type="submit" class="btn btn--primary">Salvar nova senha</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
