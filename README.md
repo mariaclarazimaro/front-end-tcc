@@ -6,7 +6,7 @@ por PEPS/FIFO e alertas visuais de validade.
 
 > ⚠️ **Apenas o front-end.** Versão estática (HTML, CSS e JS puro), só
 > para navegação visual entre as telas. Sem back-end ou banco conectado —
-> os dados são fixos (mock) e nenhuma ação é salva de verdade.
+> os dados são fixos e nenhuma ação é salva de verdade.
 
 ---
 
