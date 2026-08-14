@@ -52,8 +52,8 @@
       // Aqui ela está em texto puro só porque isso ainda é 100% front-end.
       // Quando o PHP entrar, essa senha NUNCA deve ir em texto puro pro banco —
       // o certo lá é usar password_hash() ao salvar e password_verify() ao conferir.
-      { email: "ana@docesabor.com.br", nome: "Ana Ferreira", perfil: "admin", senha: "demo1234" },
-      { email: "bruno@docesabor.com.br", nome: "Bruno Alves", perfil: "operador", senha: "demo1234" },
+      { email: "admin@gmail.com.br", nome: "user teste", perfil: "admin", senha: "demo1234" },
+      { email: "operador@gmail.com.br", nome: "user teste", perfil: "operador", senha: "demo1234" },
     ],
 
     produtos: [
